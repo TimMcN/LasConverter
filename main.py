@@ -150,3 +150,5 @@ with open ('pipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
 
 os.system("pdal pipeline pipeline.json")
+
+os.remove("pipeline.json")
