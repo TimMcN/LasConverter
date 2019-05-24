@@ -43,6 +43,7 @@ def loadShapeFile(file):
             g1 = geojson.load(map)
         geom = shape(g1)
         geomWkt = geom.wkt
+        os.remove("scratch.geojson")
         return geomWkt
 
     elif file.split('.')[1] == "shp":
@@ -86,19 +87,18 @@ def appendCropToPipe(cropShape, epsg):
 def appendSmrfFilterToPipe():
     myDictObj["pipeline"].append({
     "type":"filters.smrf",
-    "last":"true",
     "ignore":"Classification[7:7]",
     "slope":0.2,
     "window":16,
     "threshold":0.45,
-    "scalara":1.2
+    "scalar":1.2
     })
     return myDictObj
 
 def appendGroundClassification():
     myDictObj["pipeline"].append({
     "type":"filters.range",
-    "range":"Classification[2:2]"
+    "limits":"Classification[2:2]"
     })
     return myDictObj
 
@@ -139,8 +139,8 @@ if args.clip is not None:
 
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
 if args.dtm == 1:
-    myDictObj = appendSmrfFilterToPipe()
     myDictObj = appendGroundClassification()
+    #myDictObj = appendSmrfFilterToPipe()
     myDictObj = appendGtiffWriterToPipe(1, args.output_filename, args.resolution)
 #If DEM is being exported add writer pipe use output:"mean"
 elif args.dtm == 0:
@@ -150,5 +150,3 @@ with open ('pipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
 
 os.system("pdal pipeline pipeline.json")
-
-os.remove("pipeline.json")
