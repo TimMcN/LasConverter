@@ -64,16 +64,25 @@ def loadKml(file):
     modified = "POLYGON ((" + modified + "))"
     return modified
 
-
 def buildPipeInput(in_epsg,out_epsg, filename):
-    epsg = "2157"
-    filename = "Maynooth.las"
-    myDictObj = {"pipeline":[{"type": "readers.las", "spatialreference": "EPSG:"+epsg,
-    "filename":filename},
-    {"type":"filters.reprojection", "in_srs": "EPSG:"+in_epsg,
-    "out_srs":"EPSG:"+out_epsg},
-    ]}
-    return myDictObj
+    if filename.split('.')[1]=="las":
+        epsg = in_epsg
+        myDictObj = {"pipeline":[{"type": "readers.las", "spatialreference": "EPSG:"+epsg,
+        "filename":filename},
+        {"type":"filters.reprojection", "in_srs": "EPSG:"+in_epsg,
+        "out_srs":"EPSG:"+out_epsg},
+        ]}
+        return myDictObj
+    elif filename.split(".")[1]=="tif":
+        epsg = in_epsg
+        myDictObj = {"pipeline":[{"type": "readers.gdal", "spatialreference": "EPSG:"+epsg,
+        "filename":filename},
+        {"type":"filters.reprojection", "in_srs": "EPSG:"+in_epsg,
+        "out_srs":"EPSG:"+out_epsg},
+        ]}
+        return myDictObj
+    else:
+        print("Error: Invalid input file")
 
 def appendCropToPipe(cropShape, epsg):
     myDictObj["pipeline"].append({
@@ -139,16 +148,31 @@ if args.clip is not None:
 
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
 if args.dtm == 1:
-    myDictObj = appendGroundClassification()
-    #myDictObj = appendSmrfFilterToPipe()
-    myDictObj = appendGtiffWriterToPipe(1, args.output_filename, args.resolution)
-#If DEM is being exported add writer pipe use output:"mean"
+    if args.clip is not None:
+        #Parse clipping file into WKT format
+        clippingMask=""
+        if args.clip.split('.')[1] == "shp":
+            clippingMask = loadShapeFile(args.clip)
+        elif args.clip.split('.')[1] == "kml":
+            clippingMask = loadKml(args.clip)
+        elif args.clip.split('.')[1] == "geojson":
+            clippingMask = loadGeoJson(args.clip)
+        else:
+            #If Unsupported file type print error
+            print("Unsupported Clipping Filetype")
+            #Build clipping pipe
+        myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
+        myDictObj = appendGroundClassification()
+        myDictObj = appendGtiffWriterToPipe(1, args.output_filename, args.resolution)
 elif args.dtm == 0:
     myDictObj = appendGtiffWriterToPipe(0, args.output_filename, args.resolution)
 
+
 with open ('pipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
-
 os.system("pdal pipeline pipeline.json")
-
 os.remove("pipeline.json")
+
+if args.dtm==1:
+    os.system("saga_cmd grid_tools 7 -INPUT "+args.output_filename + " -RESULT scratch")
+    os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE" + "scratch_2.tif")
