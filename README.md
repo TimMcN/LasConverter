@@ -4,13 +4,13 @@ Output can be clipped with a shapefile (KML/SHP/GeoJson)
 Input and output EPSGS can be specified as their number codes where neccessary
 
 
-##Dependencies:
+## Dependencies:
 
-######PDAL (Point Data And Abstraction Library)
+###### PDAL (Point Data And Abstraction Library)
 
-######SAGA (System for Automated Geoscentific Analyses)
+###### SAGA (System for Automated Geoscentific Analyses)
 
-##Usage:
+## Usage:
 
 
 ```           usage: main.py [-h] [--resolution RESOLUTION] [--clip CLIP] [--dtm DTM]
