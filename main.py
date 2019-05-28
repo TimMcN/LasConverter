@@ -22,7 +22,7 @@ def arguments():
     parser.add_argument('--clip', type=str,
                         help = "--clip <file_path>, clip output to a SHP/KML/GeoJSON")
     parser.add_argument('--dtm', type=int, default=0,
-                        help="--dtm <1> to output a DTM, defaults to outputting a DEM. Clipping File is required for this option")
+                        help="--dtm <1> to output a DTM, defaults to outputting a DEM. Clipping File is recommended for this option")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
@@ -178,12 +178,15 @@ with open ('scratchpipeline.json', 'w') as outfile:
 os.system("pdal pipeline scratchpipeline.json")
 
 
-createShapefile(getPolygon())
 
 if args.dtm==1 and args.clip is not None:
+    createShapefile(getPolygon())
+
     os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
     os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
     os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
-
+elif args.dtm==1:
+    os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
+    os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ args.output_filename)
 
 cleanup()
