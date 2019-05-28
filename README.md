@@ -13,7 +13,8 @@ Input and output EPSGS can be specified as their number codes where neccessary
 ## Usage:
 
 
-```           usage: main.py [-h] [--resolution RESOLUTION] [--clip CLIP] [--dtm DTM]
+```           
+usage: main.py [-h] [--resolution RESOLUTION] [--clip CLIP] [--dtm DTM]
                [--in_epsg IN_EPSG] [--out_epsg OUT_EPSG]
                input_filename output_filename
 ```
