@@ -7,6 +7,7 @@ import json
 import shapefile
 import shapely.wkt
 from shapely.geometry import shape
+from shapely.geometry import Polygon
 from pykml import parser
 from osgeo import gdal, ogr
 
@@ -21,7 +22,7 @@ def arguments():
     parser.add_argument('--clip', type=str,
                         help = "--clip <file_path>, clip output to a SHP/KML/GeoJSON")
     parser.add_argument('--dtm', type=int, default=0,
-                        help="--dtm <1> to output a DTM, defaults to outputting a DEM")
+                        help="--dtm <1> to output a DTM, defaults to outputting a DEM. Clipping File is required for this option")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
@@ -65,18 +66,25 @@ def loadKml(file):
     modified = "POLYGON ((" + modified + "))"
     return modified
 
+def createShapefile(polygon):
+    poly = shapely.wkt.loads(polygon)
+    driver = ogr.GetDriverByName("Esri Shapefile")
+    ds = driver.CreateDataSource('scratch.shp')
+    layer = ds.CreateLayer('', None, ogr.wkbPolygon)
+    layer.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+    defn = layer.GetLayerDefn()
+    feat = ogr.Feature(defn)
+    feat.SetField('id', 0)
+    geom = ogr.CreateGeometryFromWkb(poly.wkb)
+    feat.SetGeometry(geom)
+    layer.CreateFeature(feat)
+    feat = geom = None
+    ds = layer = feat = geom = None
+
 def buildPipeInput(in_epsg,out_epsg, filename):
     if filename.split('.')[1]=="las":
         epsg = in_epsg
         myDictObj = {"pipeline":[{"type": "readers.las", "spatialreference": "EPSG:"+epsg,
-        "filename":filename},
-        {"type":"filters.reprojection", "in_srs": "EPSG:"+in_epsg,
-        "out_srs":"EPSG:"+out_epsg},
-        ]}
-        return myDictObj
-    elif filename.split(".")[1]=="tif":
-        epsg = in_epsg
-        myDictObj = {"pipeline":[{"type": "readers.gdal", "spatialreference": "EPSG:"+epsg,
         "filename":filename},
         {"type":"filters.reprojection", "in_srs": "EPSG:"+in_epsg,
         "out_srs":"EPSG:"+out_epsg},
@@ -129,16 +137,7 @@ def appendGtiffWriterToPipe(dsm, outputFileName, outputResolution):
         })
     return myDictObj
 
-def cleanup():
-    files = os.listdir()
-    for file in files:
-        if (file.startswith("scratch")):
-            os.remove(file)
-
-args = arguments()
-myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
-#Check for clipping file
-if args.clip is not None:
+def getPolygon():
     #Parse clipping file into WKT format
     clippingMask=""
     if args.clip.split('.')[1] == "shp":
@@ -150,7 +149,21 @@ if args.clip is not None:
     else:
         #If Unsupported file type print error
         print("Unsupported Clipping Filetype")
-        #Build clipping pipe
+        return False
+    return clippingMask
+
+def cleanup():
+    files = os.listdir()
+    for file in files:
+        if (file.startswith("scratch")):
+            os.remove(file)
+
+args = arguments()
+myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+#Check for clipping file
+if args.clip is not None:
+    #Build clipping pipe
+    clippingMask = getPolygon()
     myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
 
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
@@ -163,12 +176,14 @@ elif args.dtm == 0:
 with open ('scratchpipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
 os.system("pdal pipeline scratchpipeline.json")
-#os.remove("pipeline.json")
 
 
-if args.dtm==1:
+createShapefile(getPolygon())
+
+if args.dtm==1 and args.clip is not None:
     os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
-    os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS WorkingFiles/test2157.geojson -CLIPPED scratchtes6 -EXTENT 3")
+    os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
     os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
+
 
 cleanup()
