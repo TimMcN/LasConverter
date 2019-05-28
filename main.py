@@ -1,5 +1,6 @@
 
 import os
+import time
 import argparse
 import geojson
 import json
@@ -128,6 +129,12 @@ def appendGtiffWriterToPipe(dsm, outputFileName, outputResolution):
         })
     return myDictObj
 
+def cleanup():
+    files = os.listdir()
+    for file in files:
+        if (file.startswith("scratch")):
+            os.remove(file)
+
 args = arguments()
 myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
 #Check for clipping file
@@ -148,31 +155,20 @@ if args.clip is not None:
 
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
 if args.dtm == 1:
-    if args.clip is not None:
-        #Parse clipping file into WKT format
-        clippingMask=""
-        if args.clip.split('.')[1] == "shp":
-            clippingMask = loadShapeFile(args.clip)
-        elif args.clip.split('.')[1] == "kml":
-            clippingMask = loadKml(args.clip)
-        elif args.clip.split('.')[1] == "geojson":
-            clippingMask = loadGeoJson(args.clip)
-        else:
-            #If Unsupported file type print error
-            print("Unsupported Clipping Filetype")
-            #Build clipping pipe
-        myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
         myDictObj = appendGroundClassification()
-        myDictObj = appendGtiffWriterToPipe(1, args.output_filename, args.resolution)
+        myDictObj = appendGtiffWriterToPipe(1, "scratch"+args.output_filename, args.resolution)
 elif args.dtm == 0:
     myDictObj = appendGtiffWriterToPipe(0, args.output_filename, args.resolution)
 
-
-with open ('pipeline.json', 'w') as outfile:
+with open ('scratchpipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
-os.system("pdal pipeline pipeline.json")
-os.remove("pipeline.json")
+os.system("pdal pipeline scratchpipeline.json")
+#os.remove("pipeline.json")
+
 
 if args.dtm==1:
-    os.system("saga_cmd grid_tools 7 -INPUT "+args.output_filename + " -RESULT scratch")
-    os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE" + "scratch_2.tif")
+    os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
+    os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS WorkingFiles/test2157.geojson -CLIPPED scratchtes6 -EXTENT 3")
+    os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
+
+cleanup()
