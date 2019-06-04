@@ -9,7 +9,7 @@ import shapely.wkt
 from shapely.geometry import shape
 from shapely.geometry import Polygon
 from pykml import parser
-from osgeo import gdal, ogr
+from osgeo import ogr
 
 myDictObj = {}
 
@@ -160,6 +160,7 @@ def cleanup():
 
 args = arguments()
 myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+print("1")
 #Check for clipping file
 if args.clip is not None:
     #Build clipping pipe
@@ -171,21 +172,22 @@ if args.dtm == 1:
         myDictObj = appendGroundClassification()
         myDictObj = appendGtiffWriterToPipe(1, "scratch"+args.output_filename, args.resolution)
 elif args.dtm == 0:
-    myDictObj = appendGtiffWriterToPipe(0, args.output_filename, args.resolution)
-
+    myDictObj = appendGtiffWriterToPipe(0, "scratch"+args.output_filename, args.resolution)
+    print("2")
 with open ('scratchpipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
+print("3")
 os.system("pdal pipeline scratchpipeline.json")
+print("4")
 
 
-
-if args.dtm==1 and args.clip is not None:
+if args.clip is not None:
     createShapefile(getPolygon())
 
     os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
     os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
     os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
-elif args.dtm==1:
+else:
     os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
     os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ args.output_filename)
 
