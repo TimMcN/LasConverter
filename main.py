@@ -66,7 +66,7 @@ def loadKml(file):
     modified = "POLYGON ((" + modified + "))"
     return modified
 
-def createShapefile(polygon):
+def wktPolygonToShapefile(polygon):
     poly = shapely.wkt.loads(polygon)
     driver = ogr.GetDriverByName("Esri Shapefile")
     ds = driver.CreateDataSource('scratch.shp')
@@ -82,7 +82,7 @@ def createShapefile(polygon):
     ds = layer = feat = geom = None
 
 def buildPipeInput(in_epsg,out_epsg, filename):
-    if filename.split('.')[1]=="las":
+    if filename.split('.')[1]=="las"or filename.split('.')[1]=="laz":
         epsg = in_epsg
         myDictObj = {"pipeline":[{"type": "readers.las", "spatialreference": "EPSG:"+epsg,
         "filename":filename},
@@ -92,6 +92,28 @@ def buildPipeInput(in_epsg,out_epsg, filename):
         return myDictObj
     else:
         print("Error: Invalid input file")
+
+def appendNoiseFilterToPipe():
+    myDictObj["pipeline"].append({
+    "type":"filters.outlier",
+    "method":"statistical",
+    "multiplier":3,
+    "mean_k":8
+    })
+    myDictObj["pipeline"].append({
+    "type":"filters.range",
+    "limits": "Classification![7:7],Z[-100:3000]"
+    })
+    return myDictObj
+
+def appendElmFilterToPipe():
+    myDictObj["pipeline"].append({
+    "type":"filters.elm",
+    "cell":20.0,
+    "class":7,
+    "threshold":2
+    })
+    return myDictObj
 
 def appendCropToPipe(cropShape, epsg):
     myDictObj["pipeline"].append({
@@ -113,7 +135,13 @@ def appendSmrfFilterToPipe():
     })
     return myDictObj
 
-def appendGroundClassification():
+def appendPMFtoPipe():
+    myDictObj["pipeline"].append({
+    "type":"filters.pmf"
+    })
+    return myDictObj
+
+def appendGroundFilter():
     myDictObj["pipeline"].append({
     "type":"filters.range",
     "limits":"Classification[2:2]"
@@ -152,6 +180,17 @@ def getPolygon():
         return False
     return clippingMask
 
+def interpolate():
+    if args.clip is not None:
+        wktPolygonToShapefile(getPolygon())
+
+        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
+        os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
+        os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
+    else:
+        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
+        os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ args.output_filename)
+
 def cleanup():
     files = os.listdir()
     for file in files:
@@ -167,9 +206,12 @@ if args.clip is not None:
     clippingMask = getPolygon()
     myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
 
+myDictObj = appendNoiseFilterToPipe()
+myDictObj = appendElmFilterToPipe()
+myDictObj = appendSmrfFilterToPipe()
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
 if args.dtm == 1:
-        myDictObj = appendGroundClassification()
+        myDictObj = appendGroundFilter()
         myDictObj = appendGtiffWriterToPipe(1, "scratch"+args.output_filename, args.resolution)
 elif args.dtm == 0:
     myDictObj = appendGtiffWriterToPipe(0, "scratch"+args.output_filename, args.resolution)
@@ -180,15 +222,5 @@ print("3")
 os.system("pdal pipeline scratchpipeline.json")
 print("4")
 
-
-if args.clip is not None:
-    createShapefile(getPolygon())
-
-    os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
-    os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
-    os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
-else:
-    os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
-    os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ args.output_filename)
-
+interpolate()
 cleanup()
