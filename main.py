@@ -22,11 +22,15 @@ def arguments():
     parser.add_argument('--clip', type=str,
                         help = "--clip <file_path>, clip output to a SHP/KML/GeoJSON")
     parser.add_argument('--dtm', type=int, default=0,
-                        help="--dtm <1> to output a DTM, defaults to outputting a DEM. Clipping File is recommended for this option")
+                        help="--dtm <1> to output a DTM, defaults to outputting a DEM")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
                         help = "--OutEPSG <EPSG Code>, if left blank output EPSG is defaults to 2157")
+    parser.add_argument('--classify', type =bool, default=False,
+                        help = "set as True for unclassified point clouds, default False")
+    parser.add_argument('--clean', type =bool, default=False,
+                        help = "Set as True to remove noise, default False")
 
     return parser.parse_args()
 
@@ -128,16 +132,23 @@ def appendSmrfFilterToPipe():
     myDictObj["pipeline"].append({
     "type":"filters.smrf",
     "ignore":"Classification[7:7]",
-    "slope":0.2,
-    "window":16,
-    "threshold":0.45,
-    "scalar":1.2
+    "slope":0.2,    
+    "window":33,
+    "threshold":0.75,
+    "cell":5,
+    "scalar":1.2,
+    "slope":.3
+
     })
     return myDictObj
 
 def appendPMFtoPipe():
     myDictObj["pipeline"].append({
-    "type":"filters.pmf"
+    "type":"filters.pmf",
+    "max_window_size":50,
+    "cell_size": 4.2,
+    "exponential":True,
+    "slope":1
     })
     return myDictObj
 
@@ -197,6 +208,8 @@ def cleanup():
         if (file.startswith("scratch")):
             os.remove(file)
 
+
+
 args = arguments()
 myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
 print("1")
@@ -206,9 +219,15 @@ if args.clip is not None:
     clippingMask = getPolygon()
     myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
 
-myDictObj = appendNoiseFilterToPipe()
-myDictObj = appendElmFilterToPipe()
-myDictObj = appendSmrfFilterToPipe()
+if args.clean == True:
+    myDictObj = appendNoiseFilterToPipe()
+    myDictObj = appendElmFilterToPipe()
+
+if args.classify == True:
+    myDictObj = appendPMFtoPipe()
+    myDictObj = appendSmrfFilterToPipe()
+
+
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
 if args.dtm == 1:
         myDictObj = appendGroundFilter()
