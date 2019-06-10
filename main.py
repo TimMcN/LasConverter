@@ -125,28 +125,54 @@ def appendCropToPipe(cropShape, epsg):
     "a_srs":"EPSG:"+epsg,
     "polygon":cropShape
     })
-
     return myDictObj
 
 def appendSmrfFilterToPipe():
     myDictObj["pipeline"].append({
     "type":"filters.smrf",
     "ignore":"Classification[7:7]",
-    "slope":0.2,    
-    "window":33,
-    "threshold":0.75,
-    "cell":5,
+    "slope":0.2,
+    "window":60,
+    "threshold":0.95,
+    "cell":7,
     "scalar":1.2,
     "slope":.3
+    })
+    return myDictObj
 
+def append_hag_filter():
+    myDictObj["pipeline"].append({
+    "type":"filters.hag"
+    })
+    myDictObj["pipeline"].append({
+    "type": "filters.range",
+    "limits": "HeightAboveGround[2:)"
+    })
+
+
+    return myDictObj
+
+def append_approximate_coplanar():
+    myDictObj["pipeline"].append({
+    "type":"filters.approximatecoplanar",
+    "knn":10
+    })
+
+    return myDictObj
+
+def append_neighbor_classifier():
+    myDictObj["pipeline"].append({
+    "type":"filters.neighborclassifier",
+    "domain":"Classification![2:2]",
+    "k":20
     })
     return myDictObj
 
 def appendPMFtoPipe():
     myDictObj["pipeline"].append({
     "type":"filters.pmf",
-    "max_window_size":50,
-    "cell_size": 4.2,
+    "max_window_size":40,
+    "cell_size": 1.4,
     "exponential":True,
     "slope":1
     })
@@ -209,10 +235,8 @@ def cleanup():
             os.remove(file)
 
 
-
 args = arguments()
 myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
-print("1")
 #Check for clipping file
 if args.clip is not None:
     #Build clipping pipe
@@ -224,9 +248,8 @@ if args.clean == True:
     myDictObj = appendElmFilterToPipe()
 
 if args.classify == True:
-    myDictObj = appendPMFtoPipe()
     myDictObj = appendSmrfFilterToPipe()
-
+    myDictObj = append_neighbor_classifier()
 
 #If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
 if args.dtm == 1:
@@ -234,12 +257,10 @@ if args.dtm == 1:
         myDictObj = appendGtiffWriterToPipe(1, "scratch"+args.output_filename, args.resolution)
 elif args.dtm == 0:
     myDictObj = appendGtiffWriterToPipe(0, "scratch"+args.output_filename, args.resolution)
-    print("2")
 with open ('scratchpipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
-print("3")
 os.system("pdal pipeline scratchpipeline.json")
-print("4")
+
 
 interpolate()
 cleanup()
