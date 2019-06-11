@@ -1,4 +1,3 @@
-
 import os
 import time
 import argparse
@@ -228,6 +227,9 @@ def interpolate():
         os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
         os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ args.output_filename)
 
+def generate_contour_lines():
+    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename + " -CONTOUR contour_"+args.output_filename)
+
 def cleanup():
     files = os.listdir()
     for file in files:
@@ -257,10 +259,10 @@ if args.dtm == 1:
         myDictObj = appendGtiffWriterToPipe(1, "scratch"+args.output_filename, args.resolution)
 elif args.dtm == 0:
     myDictObj = appendGtiffWriterToPipe(0, "scratch"+args.output_filename, args.resolution)
+
 with open ('scratchpipeline.json', 'w') as outfile:
     json.dump(myDictObj, outfile)
 os.system("pdal pipeline scratchpipeline.json")
-
-
 interpolate()
+generate_contour_lines()
 cleanup()
