@@ -99,7 +99,7 @@ def buildPipeInput(in_epsg,out_epsg, filename):
     else:
         print("Error: Invalid input file")
 
-def appendNoiseFilterToPipe():
+def appendNoiseFilterToPipe(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.outlier",
     "method":"statistical",
@@ -112,7 +112,7 @@ def appendNoiseFilterToPipe():
     })
     return myDictObj
 
-def appendElmFilterToPipe():
+def appendElmFilterToPipe(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.elm",
     "cell":20.0,
@@ -121,7 +121,7 @@ def appendElmFilterToPipe():
     })
     return myDictObj
 
-def appendCropToPipe(cropShape, epsg):
+def appendCropToPipe(myDictObj, cropShape, epsg):
     myDictObj["pipeline"].append({
     "type":"filters.crop",
     "a_srs":"EPSG:"+epsg,
@@ -129,7 +129,7 @@ def appendCropToPipe(cropShape, epsg):
     })
     return myDictObj
 
-def appendSmrfFilterToPipe():
+def appendSmrfFilterToPipe(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.smrf",
     "ignore":"Classification[7:7]",
@@ -142,7 +142,7 @@ def appendSmrfFilterToPipe():
     })
     return myDictObj
 
-def append_hag_filter():
+def append_hag_filter(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.hag"
     })
@@ -154,7 +154,7 @@ def append_hag_filter():
 
     return myDictObj
 
-def append_approximate_coplanar():
+def append_approximate_coplanar(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.approximatecoplanar",
     "knn":10
@@ -162,7 +162,7 @@ def append_approximate_coplanar():
 
     return myDictObj
 
-def append_neighbor_classifier():
+def append_neighbor_classifier(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.neighborclassifier",
     "domain":"Classification![2:2]",
@@ -170,7 +170,7 @@ def append_neighbor_classifier():
     })
     return myDictObj
 
-def appendPMFtoPipe():
+def appendPMFtoPipe(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.pmf",
     "max_window_size":40,
@@ -180,14 +180,14 @@ def appendPMFtoPipe():
     })
     return myDictObj
 
-def appendGroundFilter():
+def appendGroundFilter(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.range",
     "limits":"Classification[2:2]"
     })
     return myDictObj
 
-def appendGtiffWriterToPipe(dsm, outputFileName, outputResolution):
+def appendGtiffWriterToPipe(myDictObj, dsm, outputFileName, outputResolution):
     if dsm == 1:
         myDictObj["pipeline"].append({
         "type":"writers.gdal",
@@ -238,37 +238,23 @@ def cleanup():
             os.remove(file)
 
 def output_dsm():
-    print("output")
-
-def output_dtm():
-    print("output")
-
-def output_contour():
-    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename.split('.')[0]+"_dtm."+ args.output_filename.split('.')[1] + " -CONTOUR contour_"+args.output_filename.split('.')[0]+"_contours")
-
-
-
-args = arguments()
-
-if args.dtm==1:
     myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
     #Check for clipping file
     if args.clip is not None:
         #Build clipping pipe
         clippingMask = getPolygon()
-        myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
     if args.clean == True:
-        myDictObj = appendNoiseFilterToPipe()
-        myDictObj = appendElmFilterToPipe()
+        myDictObj = appendNoiseFilterToPipe(myDictObj)
+        myDictObj = appendElmFilterToPipe(myDictObj)
 
     if args.classify == True:
-        myDictObj = appendSmrfFilterToPipe()
-        myDictObj = append_neighbor_classifier()
+        myDictObj = appendSmrfFilterToPipe(myDictObj)
+        myDictObj = append_neighbor_classifier(myDictObj)
     filename=args.output_filename.split('.')[0]+"_dtm."+args.output_filename.split('.')[1]
-    print(filename)
-    myDictObj = appendGroundFilter()
-    myDictObj = appendGtiffWriterToPipe(0, "scratch"+filename, args.resolution)
+    myDictObj = appendGroundFilter(myDictObj)
+    myDictObj = appendGtiffWriterToPipe(myDictObj, 0, "scratch"+filename, args.resolution)
 
     with open ('scratchpipeline.json', 'w') as outfile:
         json.dump(myDictObj, outfile)
@@ -276,30 +262,40 @@ if args.dtm==1:
 
     interpolate(filename,"_dtm.")
     cleanup()
-if args.dsm==1:
+
+def output_dtm():
     myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
     #Check for clipping file
     if args.clip is not None:
         #Build clipping pipe
         clippingMask = getPolygon()
-        myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
     if args.clean == True:
-        myDictObj = appendNoiseFilterToPipe()
-        myDictObj = appendElmFilterToPipe()
+        myDictObj = appendNoiseFilterToPipe(myDictObj)
+        myDictObj = appendElmFilterToPipe(myDictObj)
 
     if args.classify == True:
-        myDictObj = appendSmrfFilterToPipe()
-        myDictObj = append_neighbor_classifier()
+        myDictObj = appendSmrfFilterToPipe(myDictObj)
+        myDictObj = append_neighbor_classifier(myDictObj)
     filename = args.output_filename.split('.')[0]+"_dsm."+args.output_filename.split('.')[1]
-    print(filename, "dsm.")
-    myDictObj = appendGtiffWriterToPipe(1, "scratch"+filename, args.resolution)
+    myDictObj = appendGtiffWriterToPipe(myDictObj, 1, "scratch"+filename, args.resolution)
 
     with open ('scratchpipeline.json', 'w') as outfile:
         json.dump(myDictObj, outfile)
     os.system("pdal pipeline scratchpipeline.json")
     interpolate(filename, "_dsm.")
     cleanup()
+
+def output_contour():
+    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename.split('.')[0]+"_dtm."+ args.output_filename.split('.')[1] + " -CONTOUR contour_"+args.output_filename.split('.')[0]+ " -ZSTEP 3")
+
+
+args = arguments()
+if args.dtm==1:
+    output_dtm()
+if args.dsm==1:
+    output_dsm()
 if args.contour==1 and args.dtm==0:
     print("Error, no dtm found to produce contour lines")
 elif args.contour ==1 and args.dtm==1:
