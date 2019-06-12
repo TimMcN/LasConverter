@@ -10,7 +10,6 @@ from shapely.geometry import Polygon
 from pykml import parser
 from osgeo import ogr
 
-myDictObj = {}
 
 def arguments():
     parser = argparse.ArgumentParser(description='LAS/LAZ -> GTiff Converter')
@@ -21,7 +20,11 @@ def arguments():
     parser.add_argument('--clip', type=str,
                         help = "--clip <file_path>, clip output to a SHP/KML/GeoJSON")
     parser.add_argument('--dtm', type=int, default=0,
-                        help="--dtm <1> to output a DTM, defaults to outputting a DEM")
+                        help="--dtm <1> to output a DTM")
+    parser.add_argument('--dsm', type=int, default=0,
+                        help="--dsm <1> to output a DSM")
+    parser.add_argument('--contour', type=int, default=0,
+                        help="--contour <1> to output a contour line shapefile")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
@@ -216,19 +219,17 @@ def getPolygon():
         return False
     return clippingMask
 
-def interpolate():
+def interpolate(file, ext):
     if args.clip is not None:
         wktPolygonToShapefile(getPolygon())
-
-        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
+        out = args.output_filename.split('.')[0]+ext+args.output_filename.split('.')[1]
+        print(out)
+        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
         os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
-        os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ args.output_filename)
+        os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ out)
     else:
-        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+args.output_filename + " -RESULT scratch")
-        os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ args.output_filename)
-
-def generate_contour_lines():
-    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename + " -CONTOUR contour_"+args.output_filename)
+        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
+        os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ out)
 
 def cleanup():
     files = os.listdir()
@@ -236,33 +237,70 @@ def cleanup():
         if (file.startswith("scratch")):
             os.remove(file)
 
+def output_dsm():
+    print("output")
+
+def output_dtm():
+    print("output")
+
+def output_contour():
+    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename.split('.')[0]+"_dtm."+ args.output_filename.split('.')[1] + " -CONTOUR contour_"+args.output_filename.split('.')[0]+"_contours")
+
+
 
 args = arguments()
-myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
-#Check for clipping file
-if args.clip is not None:
-    #Build clipping pipe
-    clippingMask = getPolygon()
-    myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
 
-if args.clean == True:
-    myDictObj = appendNoiseFilterToPipe()
-    myDictObj = appendElmFilterToPipe()
+if args.dtm==1:
+    myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+    #Check for clipping file
+    if args.clip is not None:
+        #Build clipping pipe
+        clippingMask = getPolygon()
+        myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
 
-if args.classify == True:
-    myDictObj = appendSmrfFilterToPipe()
-    myDictObj = append_neighbor_classifier()
+    if args.clean == True:
+        myDictObj = appendNoiseFilterToPipe()
+        myDictObj = appendElmFilterToPipe()
 
-#If DTM is being exported, add classification pipes with writer. For writer pipe, use output:min
-if args.dtm == 1:
-        myDictObj = appendGroundFilter()
-        myDictObj = appendGtiffWriterToPipe(1, "scratch"+args.output_filename, args.resolution)
-elif args.dtm == 0:
-    myDictObj = appendGtiffWriterToPipe(0, "scratch"+args.output_filename, args.resolution)
+    if args.classify == True:
+        myDictObj = appendSmrfFilterToPipe()
+        myDictObj = append_neighbor_classifier()
+    filename=args.output_filename.split('.')[0]+"_dtm."+args.output_filename.split('.')[1]
+    print(filename)
+    myDictObj = appendGroundFilter()
+    myDictObj = appendGtiffWriterToPipe(0, "scratch"+filename, args.resolution)
 
-with open ('scratchpipeline.json', 'w') as outfile:
-    json.dump(myDictObj, outfile)
-os.system("pdal pipeline scratchpipeline.json")
-interpolate()
-generate_contour_lines()
-cleanup()
+    with open ('scratchpipeline.json', 'w') as outfile:
+        json.dump(myDictObj, outfile)
+    os.system("pdal pipeline scratchpipeline.json")
+
+    interpolate(filename,"_dtm.")
+    cleanup()
+if args.dsm==1:
+    myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+    #Check for clipping file
+    if args.clip is not None:
+        #Build clipping pipe
+        clippingMask = getPolygon()
+        myDictObj = appendCropToPipe(clippingMask, args.out_epsg)
+
+    if args.clean == True:
+        myDictObj = appendNoiseFilterToPipe()
+        myDictObj = appendElmFilterToPipe()
+
+    if args.classify == True:
+        myDictObj = appendSmrfFilterToPipe()
+        myDictObj = append_neighbor_classifier()
+    filename = args.output_filename.split('.')[0]+"_dsm."+args.output_filename.split('.')[1]
+    print(filename, "dsm.")
+    myDictObj = appendGtiffWriterToPipe(1, "scratch"+filename, args.resolution)
+
+    with open ('scratchpipeline.json', 'w') as outfile:
+        json.dump(myDictObj, outfile)
+    os.system("pdal pipeline scratchpipeline.json")
+    interpolate(filename, "_dsm.")
+    cleanup()
+if args.contour==1 and args.dtm==0:
+    print("Error, no dtm found to produce contour lines")
+elif args.contour ==1 and args.dtm==1:
+    output_contour()
