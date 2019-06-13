@@ -24,7 +24,7 @@ def arguments():
     parser.add_argument('--dsm', type=int, default=0,
                         help="--dsm <1> to output a DSM")
     parser.add_argument('--contour', type=int, default=0,
-                        help="--contour <1> to output a contour line shapefile")
+                        help="--contour <1> to output a contour line shapefile, requires DTM output")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
@@ -241,7 +241,6 @@ def output_dsm():
     myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
     #Check for clipping file
     if args.clip is not None:
-        #Build clipping pipe
         clippingMask = getPolygon()
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
@@ -288,7 +287,23 @@ def output_dtm():
     cleanup()
 
 def output_contour():
-    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename.split('.')[0]+"_dtm."+ args.output_filename.split('.')[1] + " -CONTOUR contour_"+args.output_filename.split('.')[0]+ " -ZSTEP 3")
+    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename.split('.')[0]+"_dtm."+ args.output_filename.split('.')[1] + " -CONTOUR scratchcontour_"+args.output_filename.split('.')[0]+ " -ZSTEP 5")
+    shapefile_to_geojson()
+
+def shapefile_to_geojson():
+    driver = ogr.GetDriverByName('ESRI Shapefile')
+    shp_path = "scratchcontour_"+ args.output_filename.split('.')[0]+".shp"
+    data_source = driver.Open(shp_path, 0)
+
+    fc = {'type':'FeatureCollection',
+    'features':[]}
+
+    lyr=data_source.GetLayer(0)
+    for feature in lyr:
+        fc['features'].append(feature.ExportToJson(as_object=True))
+
+    with open ("contour_"+args.output_filename.split('.')[0]+".geojson", 'w') as out:
+        json.dump(fc, out)
 
 
 args = arguments()
@@ -300,3 +315,4 @@ if args.contour==1 and args.dtm==0:
     print("Error, no dtm found to produce contour lines")
 elif args.contour ==1 and args.dtm==1:
     output_contour()
+cleanup()
