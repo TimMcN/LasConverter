@@ -23,6 +23,8 @@ def arguments():
                         help="--dtm <1> to output a DTM")
     parser.add_argument('--dsm', type=int, default=0,
                         help="--dsm <1> to output a DSM")
+    parser.add_argument('--count', type=int, default=0,
+                        help="--count <1> to output a tiff containing point count for dsm/dtm, requires a dtm/dsm output")
     parser.add_argument('--contour', type=int, default=0,
                         help="--contour <1> to output a contour line shapefile, requires DTM output")
     parser.add_argument('--in_epsg', type =str, default="2157",
@@ -187,21 +189,13 @@ def appendGroundFilter(myDictObj):
     })
     return myDictObj
 
-def appendGtiffWriterToPipe(myDictObj, dsm, outputFileName, outputResolution):
-    if dsm == 1:
-        myDictObj["pipeline"].append({
-        "type":"writers.gdal",
-        "filename": outputFileName,
-        "resolution":outputResolution,
-        "output_type":"mean"
-        })
-    else:
-        myDictObj["pipeline"].append({
-        "type":"writers.gdal",
-        "filename": outputFileName,
-        "resolution":outputResolution,
-        "output_type":"min"
-        })
+def appendGtiffWriterToPipe(myDictObj, output_type, output_filename, output_resolution):
+    myDictObj["pipeline"].append({
+    "type":"writers.gdal",
+    "filename": output_filename,
+    "resolution":output_resolution,
+    "output_type":output_type
+    })
     return myDictObj
 
 def getPolygon():
@@ -237,7 +231,7 @@ def cleanup():
         if (file.startswith("scratch")):
             os.remove(file)
 
-def output_dsm():
+def output_dtm():
     myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
     #Check for clipping file
     if args.clip is not None:
@@ -253,7 +247,7 @@ def output_dsm():
         myDictObj = append_neighbor_classifier(myDictObj)
     filename=args.output_filename.split('.')[0]+"_dtm."+args.output_filename.split('.')[1]
     myDictObj = appendGroundFilter(myDictObj)
-    myDictObj = appendGtiffWriterToPipe(myDictObj, 0, "scratch"+filename, args.resolution)
+    myDictObj = appendGtiffWriterToPipe(myDictObj, "min", "scratch"+filename, args.resolution)
 
     with open ('scratchpipeline.json', 'w') as outfile:
         json.dump(myDictObj, outfile)
@@ -262,7 +256,32 @@ def output_dsm():
     interpolate(filename,"_dtm.")
     cleanup()
 
-def output_dtm():
+def output_dtm_count():
+    myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+    #Check for clipping file
+    if args.clip is not None:
+        clippingMask = getPolygon()
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+
+    if args.clean == True:
+        myDictObj = appendNoiseFilterToPipe(myDictObj)
+        myDictObj = appendElmFilterToPipe(myDictObj)
+
+    if args.classify == True:
+        myDictObj = appendSmrfFilterToPipe(myDictObj)
+        myDictObj = append_neighbor_classifier(myDictObj)
+    filename=args.output_filename.split('.')[0]+"_dtm_count."+args.output_filename.split('.')[1]
+    myDictObj = appendGroundFilter(myDictObj)
+    myDictObj = appendGtiffWriterToPipe(myDictObj, "count", "scratch"+filename, args.resolution)
+
+    with open ('scratchpipeline.json', 'w') as outfile:
+        json.dump(myDictObj, outfile)
+    os.system("pdal pipeline scratchpipeline.json")
+
+    interpolate(filename,"_dtm_count.")
+    cleanup()
+
+def output_dsm():
     myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
     #Check for clipping file
     if args.clip is not None:
@@ -277,13 +296,41 @@ def output_dtm():
     if args.classify == True:
         myDictObj = appendSmrfFilterToPipe(myDictObj)
         myDictObj = append_neighbor_classifier(myDictObj)
+
     filename = args.output_filename.split('.')[0]+"_dsm."+args.output_filename.split('.')[1]
-    myDictObj = appendGtiffWriterToPipe(myDictObj, 1, "scratch"+filename, args.resolution)
+    myDictObj = appendGtiffWriterToPipe(myDictObj, "mean", "scratch"+filename, args.resolution)
 
     with open ('scratchpipeline.json', 'w') as outfile:
         json.dump(myDictObj, outfile)
     os.system("pdal pipeline scratchpipeline.json")
+
     interpolate(filename, "_dsm.")
+    cleanup()
+
+def output_dsm_count():
+    myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+    #Check for clipping file
+    if args.clip is not None:
+        #Build clipping pipe
+        clippingMask = getPolygon()
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+
+    if args.clean == True:
+        myDictObj = appendNoiseFilterToPipe(myDictObj)
+        myDictObj = appendElmFilterToPipe(myDictObj)
+
+    if args.classify == True:
+        myDictObj = appendSmrfFilterToPipe(myDictObj)
+        myDictObj = append_neighbor_classifier(myDictObj)
+
+    filename = args.output_filename.split('.')[0]+"_dsm_count."+args.output_filename.split('.')[1]
+    myDictObj = appendGtiffWriterToPipe(myDictObj, "count", filename, args.resolution)
+
+    with open ('scratchpipeline.json', 'w') as outfile:
+        json.dump(myDictObj, outfile)
+    os.system("pdal pipeline scratchpipeline.json")
+
+    interpolate(filename, "_dsm_count.")
     cleanup()
 
 def output_contour():
@@ -305,12 +352,13 @@ def shapefile_to_geojson():
     with open ("contour_"+args.output_filename.split('.')[0]+".geojson", 'w') as out:
         json.dump(fc, out)
 
-
 args = arguments()
 if args.dtm==1:
     output_dtm()
+    output_dtm_count()
 if args.dsm==1:
     output_dsm()
+    output_dsm_count()
 if args.contour==1 and args.dtm==0:
     print("Error, no dtm found to produce contour lines")
 elif args.contour ==1 and args.dtm==1:
