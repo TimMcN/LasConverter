@@ -66,8 +66,7 @@ def loadShapeFile(file):
         with open ('scratch.geojson', 'w') as outfile:
             json.dump(first, outfile)
         return loadShapeFile("scratch.geojson")
-    output_color_tif("_dsm.")
-
+        
 def loadKml(file):
     data = parser.parse(file).getroot()
     coords = data.Document.Folder.Placemark.Polygon.outerBoundaryIs.LinearRing.coordinates
