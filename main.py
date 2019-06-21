@@ -9,6 +9,7 @@ from shapely.geometry import shape
 from shapely.geometry import Polygon
 from pykml import parser
 from osgeo import ogr
+from osgeo import gdal
 
 
 def arguments():
@@ -27,6 +28,8 @@ def arguments():
                         help="--count <1> to output a tiff containing point count for dsm/dtm, requires a dtm/dsm output")
     parser.add_argument('--contour', type=int, default=0,
                         help="--contour <1> to output a contour line shapefile, requires DTM output")
+    parser.add_argument('--color', type=int, default=0,
+                        help="--color <1> to output a colored hillshade from DTM/DSM, requires either a DTM/DSM Output")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
@@ -63,6 +66,7 @@ def loadShapeFile(file):
         with open ('scratch.geojson', 'w') as outfile:
             json.dump(first, outfile)
         return loadShapeFile("scratch.geojson")
+    output_color_tif("_dsm.")
 
 def loadKml(file):
     data = parser.parse(file).getroot()
@@ -214,9 +218,9 @@ def getPolygon():
     return clippingMask
 
 def interpolate(file, ext):
+    out = args.output_filename.split('.')[0]+ext+args.output_filename.split('.')[1]
     if args.clip is not None:
         wktPolygonToShapefile(getPolygon())
-        out = args.output_filename.split('.')[0]+ext+args.output_filename.split('.')[1]
         print(out)
         os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
         os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
@@ -284,6 +288,125 @@ def shapefile_to_geojson():
     with open (args.output_filename.split('.')[0]+"_contour.geojson", 'w') as out:
         json.dump(fc, out)
 
+
+def write_color_config(color_heights):
+    file = open("scratchcolor_config.txt", "w+")
+    file.write(color_heights)
+
+def get_height_intervals_colors(input_file, color_arr):
+    gtif = gdal.Open(input_file)
+    srcband = gtif.GetRasterBand(1)
+    stats = srcband.GetStatistics(True,True)
+    mean = stats[2]
+    st_dv = stats[3]
+    col_loc = int(len(color_arr)/5)
+    height = mean - 2*st_dv
+
+    str_color = ""
+
+    for x in range(5):
+        col_loc = int(((len(color_arr)/5)*(x+1))-1)
+        str_color += "%.3f %.3f %.3f %.3f\n" % (height, color_arr[col_loc][0],color_arr[col_loc][1],color_arr[col_loc][2])
+        height+=st_dv
+
+    return str_color
+
+def colorize_tif(in_file):
+    out_file = in_file.split('.')[0]+"_color.tif"
+    os.system("gdaldem color-relief %s scratchcolor_config.txt scratchcolor.tif" % (in_file))
+    os.system("composite -blend 60 scratchcolor.tif scratchhill.tif scratchcolored_hill.tif")
+    os.system("listgeo %s > scratchgeodata.txt" % (in_file))
+    os.system("geotifcp -g scratchgeodata.txt scratchcolored_hill.tif %s" % (out_file))
+
+def generate_hillshade(in_file):
+    os.system("gdaldem hillshade -z 11 -multidirectional %s scratchhill.tif" % (in_file))
+
+def output_color_tif(ext):
+    in_file = args.output_filename.split('.')[0]+ext+"tif"
+    generate_hillshade(in_file)
+    if args.dtm == 1 and args.dsm==1:
+        in_file = args.output_filename.split('.')[0] + "_dtm.tif"
+    colors = get_height_intervals_colors(in_file, blue_green_5)
+    if ext == "_dsm." and args.dtm == 1:
+        in_file = args.output_filename.split('.')[0]+ext+"tif"
+
+    print(colors)
+    write_color_config(colors)
+    colorize_tif(in_file)
+    cleanup()
+
+viridis_rgb_52 = [[68,1,84],
+                [70,8,92],
+                [71,16,99],
+                [72,23,105],
+                [72,29,11],
+                [72,36,117],
+                [71,42,122],
+                [70,48,126],
+                [69,55,129],
+                [67,61,132],
+                [65,66,135],
+                [63,72,137],
+                [61,78,138],
+                [58,83,139],
+                [56,89,140],
+                [53,94,141],
+                [51,99,141],
+                [49,104,142],
+                [46,109,142],
+                [44,113,142],
+                [42,118,142],
+                [41,123,142],
+                [39,128,142],
+                [37,132,142],
+                [35,137,142],
+                [33,142,141],
+                [32,146,140],
+                [31,151,139],
+                [30,156,137],
+                [31,161,136],
+                [33,165,133],
+                [36,170,131],
+                [40,174,128],
+                [46,179,124],
+                [53,183,121],
+                [61,188,116],
+                [70,192,111],
+                [80,196,106],
+                [90,200,100],
+                [101,203,94],
+                [112,207,87],
+                [124,210,80],
+                [137,213,72],
+                [149,216,64],
+                [162,218,55],
+                [176,221,47],
+                [189,223,38],
+                [202,225,31],
+                [216,226,25],
+                [229,228,25],
+                [241,229,29],
+                [253,231,37]]
+
+viridis_rgb_5 = [[68,1,84],
+                [58,82,139],
+                [32,144,141],
+                [93,201,98],
+                [253,231,37]]
+
+red_blue_5 = [[233,8,8],
+            [173,16,244],
+            [147,7,244],
+            [39,22,227],
+            [22,2,238]]
+
+blue_green_5 = [[93,78,255],
+                [82,164,255],
+                [0,249,255],
+                [80,255,127],
+                [68,255,50]]
+
+
 args = arguments()
 if args.dtm==1 and args.count == 1:
     output_tif("_dtm.")
@@ -300,4 +423,12 @@ if args.contour==1 and args.dtm==0:
     print("Error, no dtm found to produce contour lines")
 elif args.contour ==1 and args.dtm==1:
     output_contour()
+
+if args.color == 1 and args.dtm == 1:
+    output_color_tif("_dtm.")
+if args.color ==1 and args.dsm == 1:
+    output_color_tif("_dsm.")
+if args.color == 1 and args.dsm == 0 and args.dtm ==0:
+    print("Error, No DSM/DTM to produce colored dtm from")
+
 cleanup()
