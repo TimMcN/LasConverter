@@ -214,7 +214,7 @@ def appendGtiffWriterToPipe(myDictObj, output_type, output_filename, output_reso
     })
     return myDictObj
 
-def append_las_writer(myDictObj,):
+def append_las_writer(myDictObj, output_filenamew):
     myDictObj["pipeline"].append({
     "type":"writers.las",
     "filename": output_filename,
@@ -301,7 +301,7 @@ def output_las():
         clippingMask = getPolygon(args.clip)
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
-    append_las_writer()
+    append_las_writer(myDictObj, args.output_filename+".las")
     with open ('scratchpipeline.json', 'w') as outfile:
         json.dump(myDictObj, outfile)
     os.system("pdal pipeline scratchpipeline.json")
@@ -325,7 +325,6 @@ def shapefile_to_geojson():
 
     with open (args.output_filename.split('.')[0]+"_contour.geojson", 'w') as out:
         json.dump(fc, out)
-
 
 def write_color_config(color_heights):
     file = open("scratchcolor_config.txt", "w+")
@@ -469,7 +468,7 @@ if args.color ==1 and args.dsm == 1:
 if args.color == 1 and args.dsm == 0 and args.dtm ==0:
     print("Error, No DSM/DTM to produce colored dtm from")
 
-if args.las == 2:
+if args.points == 1:
     output_las()
 
 cleanup()
