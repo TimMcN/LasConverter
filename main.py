@@ -32,6 +32,8 @@ def arguments():
                         help="--contour <1> to output a contour line shapefile, requires DTM output")
     parser.add_argument('--color', type=int, default=0,
                         help="--color <1> to output a colored hillshade from DTM/DSM, requires either a DTM/DSM Output")
+    parser.add_argument('--points', type =int, default=0,
+                        help = "--points <1> to output a new las file that has been clipped")
     parser.add_argument('--in_epsg', type =str, default="2157",
                         help = "--InEPSG <EPSG Code>, if left blank input EPSG is assumed to be 2157")
     parser.add_argument('--out_epsg', type =str, default="2157",
@@ -207,9 +209,15 @@ def appendGtiffWriterToPipe(myDictObj, output_type, output_filename, output_reso
     myDictObj["pipeline"].append({
     "type":"writers.gdal",
     "filename": output_filename,
-    "outside":True,
     "resolution":output_resolution,
     "output_type":output_type
+    })
+    return myDictObj
+
+def append_las_writer(myDictObj,):
+    myDictObj["pipeline"].append({
+    "type":"writers.las",
+    "filename": output_filename,
     })
     return myDictObj
 
@@ -281,6 +289,22 @@ def output_tif(ext):#_dsm. _dsm_count. _dtm. _dtm_count.
     os.system("pdal pipeline scratchpipeline.json")
 
     interpolate(filename,ext)
+    cleanup()
+
+def output_las():
+    myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
+    #Check for clipping file
+    if args.hwm is not None:
+        clippingMask = getPolygon(args.hwm)
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+    if args.clip is not None:
+        clippingMask = getPolygon(args.clip)
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+
+    append_las_writer()
+    with open ('scratchpipeline.json', 'w') as outfile:
+        json.dump(myDictObj, outfile)
+    os.system("pdal pipeline scratchpipeline.json")
     cleanup()
 
 def output_contour():
@@ -444,5 +468,8 @@ if args.color ==1 and args.dsm == 1:
     output_color_tif("_dsm.")
 if args.color == 1 and args.dsm == 0 and args.dtm ==0:
     print("Error, No DSM/DTM to produce colored dtm from")
+
+if args.las == 2:
+    output_las()
 
 cleanup()
