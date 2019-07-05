@@ -199,7 +199,7 @@ def appendPMFtoPipe(myDictObj):
 def appendGroundFilter(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.range",
-    "limits":"Classification![2:2]"
+    "limits":"Classification[2:2]"
     })
     return myDictObj
 
