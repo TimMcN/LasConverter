@@ -20,6 +20,8 @@ def arguments():
                         help = "Set the resolution of the output GTiff")
     parser.add_argument('--clip', type=str,
                         help = "--clip <file_path>, clip output to a SHP/KML/GeoJSON")
+    parser.add_argument('--hwm', type=str,
+                        help = "--hwm <high_water_mark_polygon_file>, clip output to a SHP/KML/GeoJSON")
     parser.add_argument('--dtm', type=int, default=0,
                         help="--dtm <1> to output a DTM")
     parser.add_argument('--dsm', type=int, default=0,
@@ -66,7 +68,7 @@ def loadShapeFile(file):
         with open ('scratch.geojson', 'w') as outfile:
             json.dump(first, outfile)
         return loadShapeFile("scratch.geojson")
-        
+
 def loadKml(file):
     data = parser.parse(file).getroot()
     coords = data.Document.Folder.Placemark.Polygon.outerBoundaryIs.LinearRing.coordinates
@@ -134,6 +136,15 @@ def appendCropToPipe(myDictObj, cropShape, epsg):
     })
     return myDictObj
 
+def appendHWMCropToPipe(myDictObj, cropShape, epsg):
+    myDictObj["pipeline"].append({
+    "type":"filters.crop",
+    "outside":True,
+    "a_srs":"EPSG:"+epsg,
+    "polygon":cropShape
+    })
+    return myDictObj
+
 def appendSmrfFilterToPipe(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.smrf",
@@ -188,7 +199,7 @@ def appendPMFtoPipe(myDictObj):
 def appendGroundFilter(myDictObj):
     myDictObj["pipeline"].append({
     "type":"filters.range",
-    "limits":"Classification[2:2]"
+    "limits":"Classification![2:2]"
     })
     return myDictObj
 
@@ -196,20 +207,21 @@ def appendGtiffWriterToPipe(myDictObj, output_type, output_filename, output_reso
     myDictObj["pipeline"].append({
     "type":"writers.gdal",
     "filename": output_filename,
+    "outside":True,
     "resolution":output_resolution,
     "output_type":output_type
     })
     return myDictObj
 
-def getPolygon():
+def getPolygon(clip):
     #Parse clipping file into WKT format
     clippingMask=""
-    if args.clip.split('.')[1] == "shp":
-        clippingMask = loadShapeFile(args.clip)
-    elif args.clip.split('.')[1] == "kml":
-        clippingMask = loadKml(args.clip)
-    elif args.clip.split('.')[1] == "geojson":
-        clippingMask = loadGeoJson(args.clip)
+    if clip.split('.')[1] == "shp":
+        clippingMask = loadShapeFile(clip)
+    elif clip.split('.')[1] == "kml":
+        clippingMask = loadKml(clip)
+    elif clip.split('.')[1] == "geojson":
+        clippingMask = loadGeoJson(clip)
     else:
         #If Unsupported file type print error
         print("Unsupported Clipping Filetype")
@@ -219,7 +231,7 @@ def getPolygon():
 def interpolate(file, ext):
     out = args.output_filename.split('.')[0]+ext+args.output_filename.split('.')[1]
     if args.clip is not None:
-        wktPolygonToShapefile(getPolygon())
+        wktPolygonToShapefile(getPolygon(args.clip))
         print(out)
         os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
         os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
@@ -237,8 +249,11 @@ def cleanup():
 def output_tif(ext):#_dsm. _dsm_count. _dtm. _dtm_count.
     myDictObj = buildPipeInput(args.in_epsg, args.out_epsg, args.input_filename)
     #Check for clipping file
+    if args.hwm is not None:
+        clippingMask = getPolygon(args.hwm)
+        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
     if args.clip is not None:
-        clippingMask = getPolygon()
+        clippingMask = getPolygon(args.clip)
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
     if args.clean == True:
