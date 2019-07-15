@@ -16,7 +16,7 @@ def arguments():
     parser = argparse.ArgumentParser(description='LAS/LAZ -> GTiff Converter')
     parser.add_argument('input_filename')
     parser.add_argument('output_filename')
-    parser.add_argument('--resolution', type=int, default=1,
+    parser.add_argument('--resolution', type=float, default=1,
                         help = "Set the resolution of the output GTiff")
     parser.add_argument('--clip', type=str,
                         help = "--clip <file_path>, clip output to a SHP/KML/GeoJSON")
@@ -214,7 +214,7 @@ def appendGtiffWriterToPipe(myDictObj, output_type, output_filename, output_reso
     })
     return myDictObj
 
-def append_las_writer(myDictObj, output_filenamew):
+def append_las_writer(myDictObj, output_filename):
     myDictObj["pipeline"].append({
     "type":"writers.las",
     "filename": output_filename,
@@ -237,7 +237,7 @@ def getPolygon(clip):
     return clippingMask
 
 def interpolate(file, ext):
-    out = args.output_filename.split('.')[0]+ext+args.output_filename.split('.')[1]
+    out = args.output_filename+ext+"tif"
     if args.clip is not None:
         wktPolygonToShapefile(getPolygon(args.clip))
         print(out)
@@ -259,7 +259,7 @@ def output_tif(ext):#_dsm. _dsm_count. _dtm. _dtm_count.
     #Check for clipping file
     if args.hwm is not None:
         clippingMask = getPolygon(args.hwm)
-        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+        myDictObj = appendHWMCropToPipe(myDictObj, clippingMask, "29903")
     if args.clip is not None:
         clippingMask = getPolygon(args.clip)
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
@@ -272,7 +272,7 @@ def output_tif(ext):#_dsm. _dsm_count. _dtm. _dtm_count.
         myDictObj = appendSmrfFilterToPipe(myDictObj)
         myDictObj = append_neighbor_classifier(myDictObj)
 
-    filename=args.output_filename.split('.')[0]+ext+args.output_filename.split('.')[1]
+    filename=args.output_filename+ext+"tif"
 
     if ext == "_dtm_count." or ext == "_dtm.":
         myDictObj = appendGroundFilter(myDictObj)
@@ -296,24 +296,24 @@ def output_las():
     #Check for clipping file
     if args.hwm is not None:
         clippingMask = getPolygon(args.hwm)
-        myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+        myDictObj = appendHWMCropToPipe(myDictObj, clippingMask, "29903")
     if args.clip is not None:
         clippingMask = getPolygon(args.clip)
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
-    append_las_writer(myDictObj, args.output_filename+".las")
+    myDictObj = append_las_writer(myDictObj, args.output_filename + ".las")
     with open ('scratchpipeline.json', 'w') as outfile:
         json.dump(myDictObj, outfile)
     os.system("pdal pipeline scratchpipeline.json")
     cleanup()
 
 def output_contour():
-    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename.split('.')[0]+"_dtm."+ args.output_filename.split('.')[1] + " -CONTOUR scratchcontour_"+args.output_filename.split('.')[0]+ " -ZSTEP 5")
+    os.system("saga_cmd shapes_grid 5 -GRID "+args.output_filename +"_dtm.tif" + " -CONTOUR scratchcontour_"+args.output_filename + " -ZSTEP 5")
     shapefile_to_geojson()
 
 def shapefile_to_geojson():
     driver = ogr.GetDriverByName('ESRI Shapefile')
-    shp_path = "scratchcontour_"+ args.output_filename.split('.')[0]+".shp"
+    shp_path = "scratchcontour_"+ args.output_filename +".shp"
     data_source = driver.Open(shp_path, 0)
 
     fc = {'type':'FeatureCollection',
@@ -323,7 +323,7 @@ def shapefile_to_geojson():
     for feature in lyr:
         fc['features'].append(feature.ExportToJson(as_object=True))
 
-    with open (args.output_filename.split('.')[0]+"_contour.geojson", 'w') as out:
+    with open (args.output_filename+"_contour.geojson", 'w') as out:
         json.dump(fc, out)
 
 def write_color_config(color_heights):
@@ -359,17 +359,17 @@ def generate_hillshade(in_file):
     os.system("gdaldem hillshade -z 11 -multidirectional %s scratchhill.tif" % (in_file))
 
 def output_color_tif(ext):
-    in_file = args.output_filename.split('.')[0]+ext+"tif"
+    in_file = args.output_filename+ext+"tif"
     generate_hillshade(in_file)
     if args.dtm == 1 and args.dsm==1:
-        in_file = args.output_filename.split('.')[0] + "_dtm.tif"
-    colors = get_height_intervals_colors(in_file, blue_green_5)
+        in_file = args.output_filename + "_dtm.tif"
+    colors = get_height_intervals_colors(in_file, rygbb_5)
     if ext == "_dsm." and args.dtm == 1:
-        in_file = args.output_filename.split('.')[0]+ext+"tif"
-
+        in_file = args.output_filename+ext+"tif"
     print(colors)
+    ext+= "_color"
     write_color_config(colors)
-    colorize_tif(in_file)
+    x = colorize_tif(in_file)
     cleanup()
 
 viridis_rgb_52 = [[68,1,84],
@@ -443,7 +443,12 @@ blue_green_5 = [[93,78,255],
                 [80,255,127],
                 [68,255,50]]
 
-
+rygbb_5 = [[0,89,255],
+                [0,255,238],
+                [94,255,0],
+                [255,217,0],
+                [255,30,0]
+                            ]
 args = arguments()
 if args.dtm==1 and args.count == 1:
     output_tif("_dtm.")
