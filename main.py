@@ -245,7 +245,7 @@ def interpolate(file, ext):
         os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
         os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ out)
     else:
-        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
+        os.system("saga_cmd grid_meantools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
         os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ out)
 
 def cleanup():
@@ -264,7 +264,7 @@ def output_tif(ext):#_dsm. _dsm_count. _dtm. _dtm_count.
         clippingMask = getPolygon(args.clip)
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
 
-    if args.clean == True:
+    if args.clean == 1:
         myDictObj = appendNoiseFilterToPipe(myDictObj)
         myDictObj = appendElmFilterToPipe(myDictObj)
 
@@ -280,7 +280,7 @@ def output_tif(ext):#_dsm. _dsm_count. _dtm. _dtm_count.
     if ext == "_dsm_count." or ext == "_dtm_count.":
         myDictObj = appendGtiffWriterToPipe(myDictObj, "count", "scratch"+filename, args.resolution)
     elif ext == "_dsm.":
-        myDictObj = appendGtiffWriterToPipe(myDictObj, "min", "scratch"+filename, args.resolution)
+        myDictObj = appendGtiffWriterToPipe(myDictObj, "max", "scratch"+filename, args.resolution)
     elif ext == "_dtm.":
         myDictObj = appendGtiffWriterToPipe(myDictObj, "mean", "scratch"+filename, args.resolution)
 
@@ -300,6 +300,9 @@ def output_las():
     if args.clip is not None:
         clippingMask = getPolygon(args.clip)
         myDictObj = appendCropToPipe(myDictObj, clippingMask, args.out_epsg)
+    if args.clean == 1:
+        myDictObj = appendNoiseFilterToPipe(myDictObj)
+        myDictObj = appendElmFilterToPipe(myDictObj)
 
     myDictObj = append_las_writer(myDictObj, args.output_filename + ".las")
     with open ('scratchpipeline.json', 'w') as outfile:
