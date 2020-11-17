@@ -245,7 +245,7 @@ def interpolate(file, ext):
         os.system("saga_cmd grid_tools 31 -GRIDS scratch.sgrd -POLYGONS scratch.shp -CLIPPED scratchtes6 -EXTENT 3")
         os.system("saga_cmd io_gdal 2 -GRIDS scratchtes6.sgrd -FILE "+ out)
     else:
-        os.system("saga_cmd grid_meantools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
+        os.system("saga_cmd grid_tools 7 -INPUT "+"scratch"+file + " -RESULT scratch")
         os.system("saga_cmd io_gdal 2 -GRIDS scratch.sgrd -FILE "+ out)
 
 def cleanup():
