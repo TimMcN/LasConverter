@@ -10,7 +10,7 @@ Input and output EPSGS can be specified as their number codes where neccessary
 
 ###### GDAL (Geospatial Data Abstraction Library)
 
-###### SAGA (System for Automated Geoscentific Analyses)
+###### SAGA (System for Automated Geoscientific Analyses)
 
 ###### ImageMick
 
