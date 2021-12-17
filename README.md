@@ -1,5 +1,5 @@
 # LasConverter
-Converts LAS/LAZ Files (LIDAR data) to DSM/DEMs.
+Generates DSM/DEMs from LAS/LAZ Files.
 Output can be clipped with a shapefile (KML/SHP/GeoJson)
 Input and output EPSGS can be specified as their number codes where neccessary
 
